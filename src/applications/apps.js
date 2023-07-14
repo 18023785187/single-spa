@@ -23,6 +23,7 @@ import { formatErrorMessage } from "./app-errors.js";
 import { isInBrowser } from "../utils/runtime-environment.js";
 import { assign } from "../utils/assign";
 
+// 注册的微应用对象，调用 registerApplication 方法注册时会把注册对象推入apps
 const apps = [];
 
 export function getAppChanges() {
@@ -74,6 +75,7 @@ export function getMountedApps() {
   return apps.filter(isActive).map(toName);
 }
 
+// 获取 apps 中注入对象的 name，返回 name 数组
 export function getAppNames() {
   return apps.map(toName);
 }
@@ -88,12 +90,46 @@ export function getAppStatus(appName) {
   return app ? app.status : null;
 }
 
+/**
+ * 注册微应用，两种写法
+ * 1：
+ * registerApplication(appName, loadApp, activeWhen, customProps)
+ * 2：
+ * registerApplication({
+ *    name: string,
+ *    app: loadApp(url),
+ *    activeWhen: activeWhen(pathname),
+ *    customProps: {}
+ * })
+ * 
+ * @param {string | RegisterApplicationConfig<ExtraProps>} appNameOrConfig
+ * 微应用名称或配置对象
+ * 
+ * @param {Application<ExtraProps>} appOrLoadApp
+ * 生命周期函数对象或者自定义加载方法，自定义加载方法需要返回 Promise
+ * 1.
+ * app = { bootstrap: () => {}, mount: () => {}, unmount: () => {} }
+ * 2.
+ * loadApp = async function(url, name) { 
+ *  // todo
+ *  return window[name] // 子应用的生命周期会挂载到基座 window 对象中
+ * }
+ * 
+ * @param {Activity} activeWhen
+ * 路由匹配规则，可以是 (location: Location) => boolean | string | 两者的数组
+ * 
+ * @param {ExtraProps | CustomPropsFn<ExtraProps> | undefined} customProps
+ * 传递给子应用的对象
+ */
 export function registerApplication(
   appNameOrConfig,
   appOrLoadApp,
   activeWhen,
   customProps
 ) {
+  /**
+   * 由于入参有两种方式，所以这里需要格式化参数
+   */
   const registration = sanitizeArguments(
     appNameOrConfig,
     appOrLoadApp,
@@ -101,6 +137,7 @@ export function registerApplication(
     customProps
   );
 
+  // name 不能与已注册的微应用同名，否则抛出错误
   if (getAppNames().indexOf(registration.name) !== -1)
     throw Error(
       formatErrorMessage(
@@ -111,6 +148,7 @@ export function registerApplication(
       )
     );
 
+  // 向 apps 推入注册对象
   apps.push(
     assign(
       {
@@ -128,6 +166,7 @@ export function registerApplication(
     )
   );
 
+  // 浏览器环境下运行
   if (isInBrowser) {
     ensureJQuerySupport();
     reroute();
@@ -226,6 +265,9 @@ function immediatelyUnloadApp(app, resolve, reject) {
     .catch(reject);
 }
 
+/**
+ * 校验 registerApplication 方法入参是否正确
+ */
 function validateRegisterWithArguments(
   name,
   appOrLoadApp,
@@ -269,6 +311,9 @@ function validateRegisterWithArguments(
     );
 }
 
+/**
+ * 校验 registerApplication 方法配置对象是否正确
+ */
 export function validateRegisterWithConfig(config) {
   if (Array.isArray(config) || config === null)
     throw Error(
@@ -277,12 +322,15 @@ export function validateRegisterWithConfig(config) {
         __DEV__ && "Configuration object can't be an Array or null!"
       )
     );
+  // config 正确的属性名单
   const validKeys = ["name", "app", "activeWhen", "customProps"];
+  // 根据 validKeys 匹配 config，如果 config 存在正确属性，则把属性推入 invalidKeys 数组中
   const invalidKeys = Object.keys(config).reduce(
     (invalidKeys, prop) =>
       validKeys.indexOf(prop) >= 0 ? invalidKeys : invalidKeys.concat(prop),
     []
   );
+  // config 没有任何有用的属性，抛出错误
   if (invalidKeys.length !== 0)
     throw Error(
       formatErrorMessage(
@@ -295,6 +343,7 @@ export function validateRegisterWithConfig(config) {
         invalidKeys.join(", ")
       )
     );
+  // 以下为校验四个参数值的逻辑
   if (typeof config.name !== "string" || config.name.length === 0)
     throw Error(
       formatErrorMessage(
@@ -336,6 +385,9 @@ export function validateRegisterWithConfig(config) {
     );
 }
 
+/**
+ * 校验 customProps 类型是否正确，正确类型为 function || object
+ */
 function validCustomProps(customProps) {
   return (
     !customProps ||
@@ -346,6 +398,11 @@ function validCustomProps(customProps) {
   );
 }
 
+/**
+ * 格式化 registerApplication 方法的参数
+ * 1. registerApplication 参数以对象的形式传入
+ * 2. registerApplication 参数分开传入
+ */
 function sanitizeArguments(
   appNameOrConfig,
   appOrLoadApp,
@@ -362,12 +419,14 @@ function sanitizeArguments(
   };
 
   if (usingObjectAPI) {
+    // 校验第一种方式入参是否正确
     validateRegisterWithConfig(appNameOrConfig);
     registration.name = appNameOrConfig.name;
     registration.loadApp = appNameOrConfig.app;
     registration.activeWhen = appNameOrConfig.activeWhen;
     registration.customProps = appNameOrConfig.customProps;
   } else {
+    // 校验第二种方式入参是否正确
     validateRegisterWithArguments(
       appNameOrConfig,
       appOrLoadApp,
@@ -380,13 +439,17 @@ function sanitizeArguments(
     registration.customProps = customProps;
   }
 
+  // 格式化 loadApp customProps activeWhen
   registration.loadApp = sanitizeLoadApp(registration.loadApp);
   registration.customProps = sanitizeCustomProps(registration.customProps);
   registration.activeWhen = sanitizeActiveWhen(registration.activeWhen);
 
   return registration;
 }
-
+/**
+ * 格式化 loadApp
+ * loadApp 最终格式为 () => Promise.resolve()
+ */
 function sanitizeLoadApp(loadApp) {
   if (typeof loadApp !== "function") {
     return () => Promise.resolve(loadApp);
@@ -394,19 +457,24 @@ function sanitizeLoadApp(loadApp) {
 
   return loadApp;
 }
-
+// 格式化 customProps
 function sanitizeCustomProps(customProps) {
   return customProps ? customProps : {};
 }
-
+/**
+ * 格式化 activeWhen
+ * 无论 activeWhen 是 function、string、array，最终都会整合为 function
+ */
 function sanitizeActiveWhen(activeWhen) {
   let activeWhenArray = Array.isArray(activeWhen) ? activeWhen : [activeWhen];
+  // 遍历 activeWhenArray，把 string 类型封装成匹配规则方法
   activeWhenArray = activeWhenArray.map((activeWhenOrPath) =>
     typeof activeWhenOrPath === "function"
       ? activeWhenOrPath
       : pathToActiveWhen(activeWhenOrPath)
   );
 
+  // 重新封装匹配规则方法，只需规则数组中有一项返回 true 则匹配成功
   return (location) =>
     activeWhenArray.some((activeWhen) => activeWhen(location));
 }
@@ -420,6 +488,7 @@ export function pathToActiveWhen(path, exactMatch) {
     if (!origin) {
       origin = `${location.protocol}//${location.host}`;
     }
+    // 过滤 origin 和 search，比如 http://xxx.com/path1/path2?search=666 --> /path1/path2
     const route = location.href
       .replace(origin, "")
       .replace(location.search, "")

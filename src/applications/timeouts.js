@@ -4,7 +4,7 @@ import { objectType, toName } from "./app.helpers";
 import { formatErrorMessage } from "./app-errors";
 
 const defaultWarningMillis = 1000;
-
+// 生命周期函数等待超时配置
 const globalTimeoutConfig = {
   bootstrap: {
     millis: 4000,
@@ -105,15 +105,23 @@ export function setUnloadMaxTime(time, dieOnTimeout, warningMillis) {
   };
 }
 
+/**
+ * 调用生命周期钩子，根据超时配置检查生命周期钩子是否在规定时间调用，否则抛出警告或错误
+ * @param {*} appOrParcel 微应用
+ * @param {string} lifecycle 生命周期名
+ * @returns {Promise<*>}
+ */
 export function reasonableTime(appOrParcel, lifecycle) {
+  // 微应用超时配置，见 globalTimeoutConfig
   const timeoutConfig = appOrParcel.timeouts[lifecycle];
   const warningPeriod = timeoutConfig.warningMillis;
   const type = objectType(appOrParcel);
 
   return new Promise((resolve, reject) => {
-    let finished = false;
-    let errored = false;
+    let finished = false; // 生命周期是否已调用成功
+    let errored = false; // 是否出错
 
+    // 调用微应用的生命周期钩子，由 src/lifecycle/lifecycle.helpers/flattenFnArray 封装
     appOrParcel[lifecycle](getProps(appOrParcel))
       .then((val) => {
         finished = true;
@@ -124,7 +132,9 @@ export function reasonableTime(appOrParcel, lifecycle) {
         reject(val);
       });
 
+    // 设置生命周期钩子在超出警告时间的情况下还没调用，则抛出警告
     setTimeout(() => maybeTimingOut(1), warningPeriod);
+    // 设置生命周期钩子超时仍未调用，则抛出错误
     setTimeout(() => maybeTimingOut(true), timeoutConfig.millis);
 
     const errMsg = formatErrorMessage(
@@ -140,8 +150,8 @@ export function reasonableTime(appOrParcel, lifecycle) {
     );
 
     function maybeTimingOut(shouldError) {
-      if (!finished) {
-        if (shouldError === true) {
+      if (!finished) { // 如果生命周期钩子还没调用
+        if (shouldError === true) { // shouldError 为 true，抛出错误
           errored = true;
           if (timeoutConfig.dieOnTimeout) {
             reject(Error(errMsg));
@@ -149,7 +159,7 @@ export function reasonableTime(appOrParcel, lifecycle) {
             console.error(errMsg);
             //don't resolve or reject, we're waiting this one out
           }
-        } else if (!errored) {
+        } else if (!errored) { // 如果未出错，抛出警告
           const numWarnings = shouldError;
           const numMillis = numWarnings * warningPeriod;
           console.warn(errMsg);
@@ -162,6 +172,7 @@ export function reasonableTime(appOrParcel, lifecycle) {
   });
 }
 
+// 根据 timeouts 补全超时配置对象并返回新的超时配置对象
 export function ensureValidAppTimeouts(timeouts) {
   const result = {};
 

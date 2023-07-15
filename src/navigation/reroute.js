@@ -27,13 +27,21 @@ import { isInBrowser } from "../utils/runtime-environment.js";
 
 let appChangeUnderway = false,
   peopleWaitingOnAppChange = [],
-  currentUrl = isInBrowser && window.location.href;
+  currentUrl = isInBrowser && window.location.href; // 当前 url
 
 export function triggerAppChange() {
   // Call reroute with no arguments, intentionally
   return reroute();
 }
 
+/**
+ * 根据微应用的状态处理微应用，用于状态变更和处理生命周期
+ * 如果调用过 start 方法，reroute 实际调用 performAppChanges（处理 unload、unmount、load、mount 状态的微应用）
+ * 否则实际调用 loadApps（处理 load 状态的微应用，因为未调用 start 前微应用只能加载）
+ * @param {*} pendingPromises 
+ * @param {*} eventArguments 
+ * @returns 
+ */
 export function reroute(pendingPromises = [], eventArguments) {
   if (appChangeUnderway) {
     return new Promise((resolve, reject) => {
@@ -50,12 +58,13 @@ export function reroute(pendingPromises = [], eventArguments) {
     appsToUnmount,
     appsToLoad,
     appsToMount,
-  } = getAppChanges();
-  let appsThatChanged,
-    navigationIsCanceled = false,
-    oldUrl = currentUrl,
-    newUrl = (currentUrl = window.location.href);
+  } = getAppChanges(); // 对 apps 的微应用进行分类
+  let appsThatChanged, // 改变的微应用数组
+    navigationIsCanceled = false, // 导航是否已取消
+    oldUrl = currentUrl, // 上一次 url
+    newUrl = (currentUrl = window.location.href); // 最新 url
 
+  // 如果已调用 start 方法，调用 performAppChanges
   if (isStarted()) {
     appChangeUnderway = true;
     appsThatChanged = appsToUnload.concat(
@@ -64,7 +73,7 @@ export function reroute(pendingPromises = [], eventArguments) {
       appsToMount
     );
     return performAppChanges();
-  } else {
+  } else { // 如果未调用 start 方法，则调用 loadApps
     appsThatChanged = appsToLoad;
     return loadApps();
   }
@@ -73,8 +82,9 @@ export function reroute(pendingPromises = [], eventArguments) {
     navigationIsCanceled = true;
   }
 
+  // 处理 appsToLoad 中的微应用
   function loadApps() {
-    return Promise.resolve().then(() => {
+    return Promise.resolve().then(() => { // 由于未调用 start，所以只能与加载微应用
       const loadPromises = appsToLoad.map(toLoadPromise);
 
       return (
@@ -90,9 +100,13 @@ export function reroute(pendingPromises = [], eventArguments) {
     });
   }
 
+  // 处理 appsToLoad、appsToUnmount、appsToLoad、appsToMount 中的微应用
   function performAppChanges() {
     return Promise.resolve().then(() => {
       // https://github.com/single-spa/single-spa/issues/545
+      /**
+       * window.dispatchEvent 为 single-spa 定义一些事件钩子，方便使用者在应用执行过程穿插一些处理
+       */
       window.dispatchEvent(
         new CustomEvent(
           appsThatChanged.length === 0
@@ -120,17 +134,17 @@ export function reroute(pendingPromises = [], eventArguments) {
         navigateToUrl(oldUrl);
         return;
       }
-
+      // 移除所有 appsToUnload 中的微应用
       const unloadPromises = appsToUnload.map(toUnloadPromise);
-
+      // 卸载所有 appsToUnmount 中的微应用
       const unmountUnloadPromises = appsToUnmount
         .map(toUnmountPromise)
         .map((unmountPromise) => unmountPromise.then(toUnloadPromise));
 
       const allUnmountPromises = unmountUnloadPromises.concat(unloadPromises);
-
+      // 所有卸载的微应用名单
       const unmountAllPromise = Promise.all(allUnmountPromises);
-
+      // 全部卸载完毕后发布 single-spa:before-mount-routing-event 事件
       unmountAllPromise.then(() => {
         window.dispatchEvent(
           new CustomEvent(
@@ -142,6 +156,7 @@ export function reroute(pendingPromises = [], eventArguments) {
 
       /* We load and bootstrap apps while other apps are unmounting, but we
        * wait to mount the app until all apps are finishing unmounting
+       * appsToLoad 执行 load 操作，并执行 tryToBootstrapAndMount 令激活的微应用初始化、挂载
        */
       const loadThenMountPromises = appsToLoad.map((app) => {
         return toLoadPromise(app).then((app) =>
@@ -152,6 +167,8 @@ export function reroute(pendingPromises = [], eventArguments) {
       /* These are the apps that are already bootstrapped and just need
        * to be mounted. They each wait for all unmounting apps to finish up
        * before they mount.
+       * 上一步令 appsToLoad 中的状态可能符合 appsToMount，所以要先把符合的微应用推入 appsToMount，
+       * 并执行 tryToBootstrapAndMount 令激活的微应用初始化、挂载
        */
       const mountPromises = appsToMount
         .filter((appToMount) => appsToLoad.indexOf(appToMount) < 0)
@@ -238,6 +255,12 @@ export function reroute(pendingPromises = [], eventArguments) {
     callCapturedEventListeners(eventArguments);
   }
 
+  /**
+   * 获取事件详情
+   * @param {boolean} isBeforeChanges 是否为触发前事件，事件名带有 before 前缀
+   * @param {Object} extraProperties 额外的属性
+   * @returns 
+   */
   function getCustomEventDetail(isBeforeChanges = false, extraProperties) {
     const newAppStatuses = {};
     const appsByNewStatus = {
@@ -251,6 +274,7 @@ export function reroute(pendingPromises = [], eventArguments) {
       [SKIP_BECAUSE_BROKEN]: [],
     };
 
+    // 如果是 before
     if (isBeforeChanges) {
       appsToLoad.concat(appsToMount).forEach((app, index) => {
         addApp(app, MOUNTED);
@@ -304,13 +328,14 @@ export function reroute(pendingPromises = [], eventArguments) {
  * https://github.com/single-spa/single-spa/issues/524
  */
 function tryToBootstrapAndMount(app, unmountAllPromise) {
-  if (shouldBeActive(app)) {
+  if (shouldBeActive(app)) { // 如果当前微应用为激活状态，执行 bootstrap
     return toBootstrapPromise(app).then((app) =>
+      // 卸载除当前微应用的所有微应用，如果当前微应用仍为激活状态，那么挂载当前微应用
       unmountAllPromise.then(() =>
         shouldBeActive(app) ? toMountPromise(app) : app
       )
     );
-  } else {
+  } else { // 否则卸载除当前微应用的所有微应用
     return unmountAllPromise.then(() => app);
   }
 }

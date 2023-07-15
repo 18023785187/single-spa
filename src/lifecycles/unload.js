@@ -9,8 +9,13 @@ import {
 import { handleAppError } from "../applications/app-errors.js";
 import { reasonableTime } from "../applications/timeouts.js";
 
-const appsToUnload = {};
+const appsToUnload = {}; // 移除的微应用名单
 
+/**
+ * 手动调用 unloadApplication api可移除应用
+ * @param {*} app 
+ * @returns 
+ */
 export function toUnloadPromise(app) {
   return Promise.resolve().then(() => {
     const unloadInfo = appsToUnload[toName(app)];
@@ -45,9 +50,10 @@ export function toUnloadPromise(app) {
     const unloadPromise =
       app.status === LOAD_ERROR
         ? Promise.resolve()
+        // 调用 unload 生命周期钩子
         : reasonableTime(app, "unload");
 
-    app.status = UNLOADING;
+    app.status = UNLOADING; // 状态变更为卸载中
 
     return unloadPromise
       .then(() => {

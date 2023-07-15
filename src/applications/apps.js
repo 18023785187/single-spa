@@ -26,40 +26,44 @@ import { assign } from "../utils/assign";
 // 注册的微应用对象，调用 registerApplication 方法注册时会把注册对象推入apps
 const apps = [];
 
+/**
+ * 根据是否激活、状态对 apps 中的微应用进行分类
+ */
 export function getAppChanges() {
-  const appsToUnload = [],
-    appsToUnmount = [],
-    appsToLoad = [],
-    appsToMount = [];
+  const appsToUnload = [], // 卸载队列
+    appsToUnmount = [], // 卸载队列
+    appsToLoad = [], // 需要加载的微应用队列
+    appsToMount = []; // 挂载队列
 
   // We re-attempt to download applications in LOAD_ERROR after a timeout of 200 milliseconds
   const currentTime = new Date().getTime();
 
   apps.forEach((app) => {
+    // 判断微应用是否活跃
     const appShouldBeActive =
       app.status !== SKIP_BECAUSE_BROKEN && shouldBeActive(app);
 
     switch (app.status) {
-      case LOAD_ERROR:
+      case LOAD_ERROR: // 加载失败但处于活跃状态，并从符合超时重载的，推入加载队列
         if (appShouldBeActive && currentTime - app.loadErrorTime >= 200) {
           appsToLoad.push(app);
         }
         break;
-      case NOT_LOADED:
-      case LOADING_SOURCE_CODE:
+      case NOT_LOADED: // 还没加载且处于活跃状态的，推入加载队列
+      case LOADING_SOURCE_CODE: // 已加载源代码且处于活跃状态的，推入加载队列
         if (appShouldBeActive) {
           appsToLoad.push(app);
         }
         break;
-      case NOT_BOOTSTRAPPED:
-      case NOT_MOUNTED:
-        if (!appShouldBeActive && getAppUnloadInfo(toName(app))) {
+      case NOT_BOOTSTRAPPED: // 未准备完成的
+      case NOT_MOUNTED: // 未挂载的
+        if (!appShouldBeActive && getAppUnloadInfo(toName(app))) { // 失活，推入卸载队列
           appsToUnload.push(app);
-        } else if (appShouldBeActive) {
+        } else if (appShouldBeActive) { // 处于活跃态的，推入挂载队列
           appsToMount.push(app);
         }
         break;
-      case MOUNTED:
+      case MOUNTED: // 已挂载但失活的，推入卸载队列
         if (!appShouldBeActive) {
           appsToUnmount.push(app);
         }
@@ -106,13 +110,13 @@ export function getAppStatus(appName) {
  * 微应用名称或配置对象
  * 
  * @param {Application<ExtraProps>} appOrLoadApp
- * 生命周期函数对象或者自定义加载方法，自定义加载方法需要返回 Promise
+ * 生命周期函数对象或者自定义加载方法，自定义加载方法需要返回带有生命周期结果的 Promise
  * 1.
  * app = { bootstrap: () => {}, mount: () => {}, unmount: () => {} }
  * 2.
- * loadApp = async function(url, name) { 
+ * loadApp = async function(props) { 
  *  // todo
- *  return window[name] // 子应用的生命周期会挂载到基座 window 对象中
+ *  return app
  * }
  * 
  * @param {Activity} activeWhen
@@ -152,8 +156,8 @@ export function registerApplication(
   apps.push(
     assign(
       {
-        loadErrorTime: null,
-        status: NOT_LOADED,
+        loadErrorTime: null, // 加载错误的当前时间
+        status: NOT_LOADED, // 状态，初始态赋予 NOT_LOADED
         parcels: {},
         devtools: {
           overlays: {

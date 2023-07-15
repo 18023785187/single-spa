@@ -2,6 +2,7 @@ import { find } from "../utils/find.js";
 import { objectType, toName } from "../applications/app.helpers.js";
 import { formatErrorMessage } from "../applications/app-errors.js";
 
+// 判断 fn 是否为 Function 或 Array<Function>
 export function validLifecycleFn(fn) {
   return fn && (typeof fn === "function" || isArrayOfFns(fn));
 
@@ -12,6 +13,12 @@ export function validLifecycleFn(fn) {
   }
 }
 
+/**
+ * 把生命周期对象值扁平化为一个方法
+ * @param {*} appOrParcel 
+ * @param {string} lifecycle 生命周期名称
+ * @returns 
+ */
 export function flattenFnArray(appOrParcel, lifecycle) {
   let fns = appOrParcel[lifecycle] || [];
   fns = Array.isArray(fns) ? fns : [fns];
@@ -44,6 +51,7 @@ export function flattenFnArray(appOrParcel, lifecycle) {
   };
 }
 
+// 判断传入的 promise 是否为 promise 实例
 export function smellsLikeAPromise(promise) {
   return (
     promise &&

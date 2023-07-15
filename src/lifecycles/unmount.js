@@ -7,12 +7,22 @@ import {
 import { handleAppError, transformErr } from "../applications/app-errors.js";
 import { reasonableTime } from "../applications/timeouts.js";
 
+/**
+ * 卸载微应用，微应用状态变更为 UNMOUNTING
+ * 调用 unmount 生命周期函数
+ * 如果成功状态变更为 NOT_MOUNTED
+ * 如果失败状态变更为 SKIP_BECAUSE_BROKEN
+ * @param {*} appOrParcel 
+ * @param {*} hardFail 
+ * @returns 
+ */
 export function toUnmountPromise(appOrParcel, hardFail) {
   return Promise.resolve().then(() => {
+    // 如果微应用状态不为 MOUNTED，返回
     if (appOrParcel.status !== MOUNTED) {
       return appOrParcel;
     }
-    appOrParcel.status = UNMOUNTING;
+    appOrParcel.status = UNMOUNTING; // 微应用状态改为卸载中
 
     const unmountChildrenParcels = Object.keys(
       appOrParcel.parcels
@@ -21,6 +31,7 @@ export function toUnmountPromise(appOrParcel, hardFail) {
     let parcelError;
 
     return Promise.all(unmountChildrenParcels)
+      // .then(resolve, reject)
       .then(unmountAppOrParcel, (parcelError) => {
         // There is a parcel unmount error
         return unmountAppOrParcel().then(() => {
@@ -35,16 +46,18 @@ export function toUnmountPromise(appOrParcel, hardFail) {
       })
       .then(() => appOrParcel);
 
+    // 调用 unmount 生命周期函数
     function unmountAppOrParcel() {
       // We always try to unmount the appOrParcel, even if the children parcels failed to unmount.
+      // 调用 unmount 生命周期函数
       return reasonableTime(appOrParcel, "unmount")
         .then(() => {
           // The appOrParcel needs to stay in a broken status if its children parcels fail to unmount
-          if (!parcelError) {
+          if (!parcelError) { // 微应用卸载成功，状态变更为未挂载
             appOrParcel.status = NOT_MOUNTED;
           }
         })
-        .catch((err) => {
+        .catch((err) => { // 微应用写在失败，状态变更为死亡
           if (hardFail) {
             throw transformErr(err, appOrParcel, SKIP_BECAUSE_BROKEN);
           } else {

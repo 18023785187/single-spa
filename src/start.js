@@ -3,7 +3,7 @@ import { formatErrorMessage } from "./applications/app-errors.js";
 import { setUrlRerouteOnly } from "./navigation/navigation-events.js";
 import { isInBrowser } from "./utils/runtime-environment.js";
 
-let started = false;
+let started = false; // 是否已调用 start 方法
 
 export function start(opts) {
   started = true;
@@ -19,6 +19,7 @@ export function isStarted() {
   return started;
 }
 
+// 5秒内没调用 start 方法会警告
 if (isInBrowser) {
   setTimeout(() => {
     if (!started) {

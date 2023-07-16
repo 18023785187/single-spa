@@ -7,6 +7,7 @@ let started = false; // 是否已调用 start 方法
 
 export function start(opts) {
   started = true;
+  // 如果 urlRerouteOnly: true，则路由相同的情况下不会调用 reroute，以节省性能
   if (opts && opts.urlRerouteOnly) {
     setUrlRerouteOnly(opts.urlRerouteOnly);
   }

@@ -104,9 +104,7 @@ export function reroute(pendingPromises = [], eventArguments) {
   function performAppChanges() {
     return Promise.resolve().then(() => {
       // https://github.com/single-spa/single-spa/issues/545
-      /**
-       * window.dispatchEvent 为 single-spa 定义一些事件钩子，方便使用者在应用执行过程穿插一些处理
-       */
+      // window.dispatchEvent 为 single-spa 定义一些事件钩子，方便使用者在应用执行过程穿插一些处理
       window.dispatchEvent(
         new CustomEvent(
           appsThatChanged.length === 0

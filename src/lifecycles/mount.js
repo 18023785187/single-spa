@@ -15,8 +15,8 @@ let firstMountFired = false; // 是否为第一次挂载
  * 挂载当前微应用
  * 如果是第一次挂载之前，调用 single-spa:before-first-mount 事件
  * 状态变更为已挂载，调用 mount 生命周期钩子
- * 成功，状态变更为已挂载，如果是第一次挂载，调用 single-spa:first-mount 事件
- * 失败，状态变更为已挂载，方便 toUnmountPromise 卸载它，并把状态变更为 SKIP_BECAUSE_BROKEN
+ * 成功，状态变更为 MOUNTED，如果是第一次挂载，调用 single-spa:first-mount 事件
+ * 失败，状态变更为 MOUNTED，方便 toUnmountPromise 卸载它，并把状态变更为 SKIP_BECAUSE_BROKEN
  * @param {*} appOrParcel 微应用
  * @param {*} hardFail 
  * @returns 

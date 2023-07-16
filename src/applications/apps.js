@@ -50,14 +50,15 @@ export function getAppChanges() {
         }
         break;
       case NOT_LOADED: // 还没加载且处于活跃状态的，推入加载队列
-      case LOADING_SOURCE_CODE: // 已加载源代码且处于活跃状态的，推入加载队列
+      case LOADING_SOURCE_CODE: // 加载源代码中且处于活跃状态的，推入加载队列
         if (appShouldBeActive) {
           appsToLoad.push(app);
         }
         break;
-      case NOT_BOOTSTRAPPED: // 未准备完成的
+      case NOT_BOOTSTRAPPED: // 未初始化的
       case NOT_MOUNTED: // 未挂载的
-        if (!appShouldBeActive && getAppUnloadInfo(toName(app))) { // 失活，推入卸载队列
+        if (!appShouldBeActive && getAppUnloadInfo(toName(app))) {
+          // 失活且处于卸载名单的（调用 unloadApplication api卸载组件的），推入卸载队列
           appsToUnload.push(app);
         } else if (appShouldBeActive) { // 处于活跃态的，推入挂载队列
           appsToMount.push(app);

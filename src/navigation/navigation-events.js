@@ -16,13 +16,14 @@ const capturedEventListeners = {
 
 export const routingEventsListeningTo = ["hashchange", "popstate"];
 
+// 跳转路由
 export function navigateToUrl(obj) {
   let url;
   if (typeof obj === "string") {
     url = obj;
   } else if (this && this.href) {
     url = this.href;
-  } else if (
+  } else if ( // obj 以事件的形式传入
     obj &&
     obj.currentTarget &&
     obj.currentTarget.href &&
@@ -40,23 +41,27 @@ export function navigateToUrl(obj) {
     );
   }
 
+  // 根据给定路由地址创建 a 标签
   const current = parseUri(window.location.href);
   const destination = parseUri(url);
 
-  if (url.indexOf("#") === 0) {
+  if (url.indexOf("#") === 0) { // hash 形式的 url
     window.location.hash = destination.hash;
   } else if (current.host !== destination.host && destination.host) {
+    // 域名端口不同，直接跳转到 url
     if (process.env.BABEL_ENV === "test") {
       return { wouldHaveReloadedThePage: true };
     } else {
       window.location.href = url;
     }
   } else if (
+    // 两者 url 完全相同
     destination.pathname === current.pathname &&
     destination.search === current.search
   ) {
     window.location.hash = destination.hash;
   } else {
+    // 不是 hash 路由，两者 host 相同，但 pathname 或 search 不相同时，直接调用 pushState
     // different path, host, or query params
     window.history.pushState(null, null, url);
   }
@@ -87,16 +92,24 @@ export function setUrlRerouteOnly(val) {
   urlRerouteOnly = val;
 }
 
+// 调用 reroute
 function urlReroute() {
   reroute([], arguments);
 }
 
+/**
+ * 改写 pushState、replaceState 方法
+ * @param {window.history.pushState | window.history.replaceState} updateState 
+ * @param {'pushState', 'replaceState'} methodName 
+ * @returns 
+ */
 function patchedUpdateState(updateState, methodName) {
   return function () {
-    const urlBefore = window.location.href;
-    const result = updateState.apply(this, arguments);
-    const urlAfter = window.location.href;
+    const urlBefore = window.location.href; // 触发前的 url
+    const result = updateState.apply(this, arguments); // 调用原生 pushState 或 replaceState 事件
+    const urlAfter = window.location.href; // 触发后的 url
 
+    // 如果设置了 start({ urlRerouteOnly: true }) 或跳转前后路由相同，则不会触发这段逻辑
     if (!urlRerouteOnly || urlBefore !== urlAfter) {
       if (isStarted()) {
         // fire an artificial popstate event once single-spa is started,
@@ -138,6 +151,7 @@ function createPopStateEvent(state, originalMethodName) {
 
 if (isInBrowser) {
   // We will trigger an app change for any routing events.
+  // hashchange 或 popstate 的触发会调用 reroute 事件
   window.addEventListener("hashchange", urlReroute);
   window.addEventListener("popstate", urlReroute);
 
@@ -171,6 +185,7 @@ if (isInBrowser) {
     return originalRemoveEventListener.apply(this, arguments);
   };
 
+  // 加强 pushState 和 replaceState
   window.history.pushState = patchedUpdateState(
     window.history.pushState,
     "pushState"
@@ -180,6 +195,7 @@ if (isInBrowser) {
     "replaceState"
   );
 
+  // 防止用户引入两次 single-spa，不过一般没人会这样做吧
   if (window.singleSpaNavigate) {
     console.warn(
       formatErrorMessage(
@@ -192,10 +208,13 @@ if (isInBrowser) {
     /* For convenience in `onclick` attributes, we expose a global function for navigating to
      * whatever an <a> tag's href is.
      */
+    // window.singleSpaNavigate 提供给用户手动跳转路由，
+    // 该属性也可以作为判断微应用的环境是独立运行还是 single-spa 运行的依据
     window.singleSpaNavigate = navigateToUrl;
   }
 }
 
+// 根据给定路由地址创建 a 标签
 function parseUri(str) {
   const anchor = document.createElement("a");
   anchor.href = str;
